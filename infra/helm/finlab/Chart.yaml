@@ -1,0 +1,6 @@
+apiVersion: v2
+name: finlab
+description: FinLab DevOps chart (Actividad 4 + Proyecto Final)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

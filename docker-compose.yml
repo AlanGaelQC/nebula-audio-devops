@@ -1,0 +1,9 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: finlab
+      POSTGRES_USER: finlab
+      POSTGRES_DB: finlab
+    ports:
+      - "5432:5432"
