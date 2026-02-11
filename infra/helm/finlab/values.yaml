@@ -1,6 +1,7 @@
-namespace: finlab
+namespace:
+  create: false
 
-registry: localhost:5001
+registry: ""
 
 backend:
   image: finlab/backend

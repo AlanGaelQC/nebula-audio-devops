@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
+RUN npm ci --no-audit --no-fund --loglevel verbose
+
+COPY . .
 RUN npm run build
 
 FROM nginx:1.27-alpine

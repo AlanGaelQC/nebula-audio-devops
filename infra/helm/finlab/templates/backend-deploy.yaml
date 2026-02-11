@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels: { app: backend }
 spec:
   replicas: {{ .Values.backend.replicas }}
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: {{ .Values.registry }}/{{ .Values.backend.image }}:{{ .Values.backend.tag }}
+          image: {{ if .Values.registry }}{{ printf "%s/%s:%s" .Values.registry .Values.backend.image .Values.backend.tag | quote }}{{ else }}{{ printf "%s:%s" .Values.backend.image .Values.backend.tag | quote }}{{ end }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: {{ .Values.backend.port }}
