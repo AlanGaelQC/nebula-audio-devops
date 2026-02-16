@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { createPool, ensureSchema } from "./db.js";
+import { createPool, ensureSchema, isMemoryMode } from "./db.js";
 
 dotenv.config();
 
@@ -12,15 +12,44 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 
 let memItems = [{ id: 1, text: "Hello FinLab", created_at: new Date().toISOString() }];
+let httpServer;
 
+const memoryMode = isMemoryMode();
 const pool = createPool();
-if (pool) {
-  pool.on("error", (err) => console.error("Postgres pool error:", err));
-  ensureSchema(pool).catch((e) => console.error("ensureSchema error:", e));
+
+function parseIntOrDefault(value, fallback) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function initDatabase() {
+  if (!pool) return;
+
+  const maxAttempts = parseIntOrDefault(process.env.DB_INIT_MAX_ATTEMPTS, 30);
+  const retryDelayMs = parseIntOrDefault(process.env.DB_INIT_RETRY_DELAY_MS, 1000);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await ensureSchema(pool);
+      console.log(`DB schema ready (attempt ${attempt}/${maxAttempts})`);
+      return;
+    } catch (error) {
+      if (attempt === maxAttempts) throw error;
+      console.error(
+        `DB init failed (attempt ${attempt}/${maxAttempts}), retrying in ${retryDelayMs}ms:`,
+        error.message
+      );
+      await delay(retryDelayMs);
+    }
+  }
 }
 
 async function dbOk() {
-  if (!pool) return true; // Modo sin DB: considerado listo
+  if (!pool) return true; // Memory mode is always ready.
   const res = await pool.query("SELECT 1 AS ok");
   return res?.rows?.[0]?.ok === 1;
 }
@@ -69,6 +98,44 @@ app.post("/api/items", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`API listening on 0.0.0.0:${port}`);
+async function start() {
+  if (pool) {
+    pool.on("error", (err) => console.error("Postgres pool error:", err));
+    console.log("DB mode: postgres");
+    await initDatabase();
+  } else if (memoryMode) {
+    console.warn("DB mode: memory (set DB_MODE=postgres to use PostgreSQL)");
+  }
+
+  httpServer = app.listen(port, () => {
+    console.log(`API listening on 0.0.0.0:${port}`);
+  });
+}
+
+async function shutdown(signal) {
+  console.log(`${signal} received, shutting down`);
+
+  if (httpServer) {
+    await new Promise((resolve) => httpServer.close(resolve));
+  }
+
+  if (pool) {
+    await pool.end();
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    shutdown(signal)
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error("Shutdown failed:", error);
+        process.exit(1);
+      });
+  });
+}
+
+start().catch((error) => {
+  console.error("Startup failed:", error);
+  process.exit(1);
 });

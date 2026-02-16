@@ -24,7 +24,7 @@ echo
 
 # 0) Validación previa (rápida, sin destruir nada)
 if [ -x "./scripts/06_validate_env.sh" ]; then
-  ./scripts/06_validate_env.sh
+    bash ./scripts/06_validate_env.sh
 else
   warn "No existe ./scripts/06_validate_env.sh o no es ejecutable. Continuaré, pero es recomendable validarlo."
 fi

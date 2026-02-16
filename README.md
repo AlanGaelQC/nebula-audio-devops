@@ -14,7 +14,7 @@ y IaC (Terraform + Ansible) en ambiente local.
   - GitHub Actions: lint + unit tests + build
   - Jenkins: integration/e2e/perf + build/push imágenes + deploy Helm a cluster local
 - Testing:
-  - Unit: Jest (backend)
+  - Unit: Node test runner (`node --test`, backend)
   - E2E: Playwright (UI)
   - Perf: k6 (API)
 - IaC:
@@ -43,6 +43,24 @@ y IaC (Terraform + Ansible) en ambiente local.
 ## Variables
 - Registry local (k3d): `localhost:5001`
 - Namespace: `finlab`
+
+## Backend + Postgres (WSL local)
+- Sin `.env`, el backend intenta conectarse por defecto a:
+  - host: `localhost`
+  - puerto: `5432`
+  - user/password/db: `finlab` / `finlab` / `finlab`
+- Levanta Postgres local:
+  - `docker compose up -d db`
+- Ejecuta backend:
+  - `cd apps/backend && npm install && npm run dev`
+- Si necesitas configurar otra conexión:
+  - usa `apps/backend/.env.example` como plantilla para tu `.env`
+  - o define `DATABASE_URL`
+- El backend reintenta inicializar esquema al iniciar:
+  - `DB_INIT_MAX_ATTEMPTS` (default `30`)
+  - `DB_INIT_RETRY_DELAY_MS` (default `1000`)
+- Para volver al mock en memoria:
+  - `DB_MODE=memory`
 
 ## Licencia
 Material educativo.
