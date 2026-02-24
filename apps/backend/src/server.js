@@ -8,6 +8,47 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+// API Gateway — redirige tráfico a microservicios
+const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://auth-service:3001";
+const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://audio-service:3002";
+const ANALYTICS_SERVICE = process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3003";
+
+async function proxyRequest(targetUrl, req, res) {
+  try {
+    const fetchOptions = {
+      method: req.method,
+      headers: { "content-type": "application/json", ...req.headers },
+    };
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+    const response = await fetch(targetUrl, fetchOptions);
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (e) {
+    console.error("Proxy error:", e.message);
+    return res.status(502).json({ error: "service_unavailable" });
+  }
+}
+
+app.all("/api/auth/*", (req, res) => {
+  const path = req.url;
+  proxyRequest(`${AUTH_SERVICE}${path}`, req, res);
+});
+
+app.all("/api/audio/*", (req, res) => {
+  const path = req.url;
+  proxyRequest(`${AUDIO_SERVICE}${path}`, req, res);
+});
+
+app.all("/api/analytics/*", (req, res) => {
+  const path = req.url;
+  proxyRequest(`${ANALYTICS_SERVICE}${path}`, req, res);
+});
+
+app.get("/api/recommendations", (req, res) => {
+  proxyRequest(`${ANALYTICS_SERVICE}/api/analytics/recommendations?${new URLSearchParams(req.query)}`, req, res);
+});
 
 const port = process.env.PORT || 3000;
 

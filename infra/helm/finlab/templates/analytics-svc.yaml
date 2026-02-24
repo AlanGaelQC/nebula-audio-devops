@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: finlab
+spec:
+  selector:
+    app: analytics-service
+  ports:
+    - port: {{ .Values.analyticsService.port }}
+      targetPort: {{ .Values.analyticsService.port }}
+  type: ClusterIP

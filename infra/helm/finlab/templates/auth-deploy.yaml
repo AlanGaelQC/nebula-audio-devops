@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: finlab
+spec:
+  replicas: {{ .Values.authService.replicas }}
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: {{ .Values.registry }}/{{ .Values.authService.image }}:{{ .Values.authService.tag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.authService.port }}
+          env:
+            {{- range $key, $val := .Values.authService.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.authService.resources.requests.cpu }}
+              memory: {{ .Values.authService.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.authService.resources.limits.cpu }}
+              memory: {{ .Values.authService.resources.limits.memory }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.authService.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.authService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5

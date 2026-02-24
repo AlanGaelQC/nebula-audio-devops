@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: audio-service
+  namespace: finlab
+spec:
+  selector:
+    app: audio-service
+  ports:
+    - port: {{ .Values.audioService.port }}
+      targetPort: {{ .Values.audioService.port }}
+  type: ClusterIP

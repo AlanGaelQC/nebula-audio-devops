@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audio-service
+  namespace: finlab
+spec:
+  replicas: {{ .Values.audioService.replicas }}
+  selector:
+    matchLabels:
+      app: audio-service
+  template:
+    metadata:
+      labels:
+        app: audio-service
+    spec:
+      containers:
+        - name: audio-service
+          image: {{ .Values.registry }}/{{ .Values.audioService.image }}:{{ .Values.audioService.tag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.audioService.port }}
+          env:
+            {{- range $key, $val := .Values.audioService.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.audioService.resources.requests.cpu }}
+              memory: {{ .Values.audioService.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.audioService.resources.limits.cpu }}
+              memory: {{ .Values.audioService.resources.limits.memory }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.audioService.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.audioService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5

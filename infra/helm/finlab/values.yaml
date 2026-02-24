@@ -1,22 +1,24 @@
 namespace:
   create: false
-
 registry: k3d-finlab-registry:5000
 
 backend:
   image: finlab/backend
-  tag: "0.1.0"
-  replicas: 2
+  tag: "0.2.3"
+  replicas: 1
   port: 3000
   env:
     PORT: "3000"
     DB_MODE: "postgres"
-    DATABASE_URL: ""   # optional override (if set, DB_* vars are ignored)
+    DATABASE_URL: ""
     DB_HOST: "postgres"
     DB_PORT: "5432"
     DB_USER: "finlab"
     DB_PASSWORD: "finlab"
     DB_NAME: "finlab"
+    AUTH_SERVICE_URL: "http://auth-service:3001"
+    AUDIO_SERVICE_URL: "http://audio-service:3002"
+    ANALYTICS_SERVICE_URL: "http://analytics-service:3003"
   resources:
     requests:
       cpu: 100m
@@ -27,9 +29,54 @@ backend:
 
 frontend:
   image: finlab/frontend
-  tag: "0.1.0"
+  tag: "0.2.7"
   replicas: 2
   port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+authService:
+  image: finlab/auth-service
+  tag: "0.1.0"
+  replicas: 1
+  port: 3001
+  env:
+    PORT: "3001"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+audioService:
+  image: finlab/audio-service
+  tag: "0.1.0"
+  replicas: 1
+  port: 3002
+  env:
+    PORT: "3002"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+analyticsService:
+  image: finlab/analytics-service
+  tag: "0.1.0"
+  replicas: 1
+  port: 3003
+  env:
+    PORT: "3003"
   resources:
     requests:
       cpu: 50m

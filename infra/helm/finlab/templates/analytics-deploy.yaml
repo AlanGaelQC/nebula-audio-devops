@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: finlab
+spec:
+  replicas: {{ .Values.analyticsService.replicas }}
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      containers:
+        - name: analytics-service
+          image: {{ .Values.registry }}/{{ .Values.analyticsService.image }}:{{ .Values.analyticsService.tag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.analyticsService.port }}
+          env:
+            {{- range $key, $val := .Values.analyticsService.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.analyticsService.resources.requests.cpu }}
+              memory: {{ .Values.analyticsService.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.analyticsService.resources.limits.cpu }}
+              memory: {{ .Values.analyticsService.resources.limits.memory }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.analyticsService.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.analyticsService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
