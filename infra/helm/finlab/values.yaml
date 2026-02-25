@@ -4,7 +4,7 @@ registry: k3d-finlab-registry:5000
 
 backend:
   image: finlab/backend
-  tag: "0.2.3"
+  tag: "0.2.4"
   replicas: 1
   port: 3000
   env:
@@ -26,6 +26,10 @@ backend:
     limits:
       cpu: 500m
       memory: 256Mi
+  hpa:
+    minReplicas: 1
+    maxReplicas: 3
+    cpuUtilization: 70
 
 frontend:
   image: finlab/frontend
@@ -49,11 +53,15 @@ authService:
     PORT: "3001"
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 80m
+      memory: 96Mi
     limits:
-      cpu: 200m
-      memory: 128Mi
+      cpu: 300m
+      memory: 192Mi
+  hpa:
+    minReplicas: 1
+    maxReplicas: 4
+    cpuUtilization: 70
 
 audioService:
   image: finlab/audio-service
@@ -64,11 +72,15 @@ audioService:
     PORT: "3002"
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 200m
+      cpu: 100m
       memory: 128Mi
+    limits:
+      cpu: 400m
+      memory: 256Mi
+  hpa:
+    minReplicas: 1
+    maxReplicas: 6
+    cpuUtilization: 70
 
 analyticsService:
   image: finlab/analytics-service
@@ -79,11 +91,15 @@ analyticsService:
     PORT: "3003"
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 80m
+      memory: 96Mi
     limits:
-      cpu: 200m
-      memory: 128Mi
+      cpu: 300m
+      memory: 192Mi
+  hpa:
+    minReplicas: 1
+    maxReplicas: 3
+    cpuUtilization: 70
 
 postgres:
   enabled: true

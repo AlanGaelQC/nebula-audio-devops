@@ -50,14 +50,23 @@ ok "Cluster creado"
 # 3) Build & push images (host registry)
 echo
 echo "== Build & push images to host registry =="
-[ -d "./apps/backend" ] || fail "No existe ./apps/backend. Ejecuta desde la raíz del repo."
-[ -d "./apps/frontend" ] || fail "No existe ./apps/frontend. Ejecuta desde la raíz del repo."
+[ -d "./apps/backend" ]           || fail "No existe ./apps/backend."
+[ -d "./apps/frontend" ]          || fail "No existe ./apps/frontend."
+[ -d "./apps/auth-service" ]      || fail "No existe ./apps/auth-service."
+[ -d "./apps/audio-service" ]     || fail "No existe ./apps/audio-service."
+[ -d "./apps/analytics-service" ] || fail "No existe ./apps/analytics-service."
 
-docker build -t "${HOST_REG}/${NAMESPACE}/backend:${TAG}" ./apps/backend
-docker build -t "${HOST_REG}/${NAMESPACE}/frontend:${TAG}" ./apps/frontend
+docker build -t "${HOST_REG}/${NAMESPACE}/backend:${TAG}"           ./apps/backend
+docker build -t "${HOST_REG}/${NAMESPACE}/frontend:${TAG}"          ./apps/frontend
+docker build -t "${HOST_REG}/${NAMESPACE}/auth-service:${TAG}"      ./apps/auth-service
+docker build -t "${HOST_REG}/${NAMESPACE}/audio-service:${TAG}"     ./apps/audio-service
+docker build -t "${HOST_REG}/${NAMESPACE}/analytics-service:${TAG}" ./apps/analytics-service
 
 docker push "${HOST_REG}/${NAMESPACE}/backend:${TAG}"
 docker push "${HOST_REG}/${NAMESPACE}/frontend:${TAG}"
+docker push "${HOST_REG}/${NAMESPACE}/auth-service:${TAG}"
+docker push "${HOST_REG}/${NAMESPACE}/audio-service:${TAG}"
+docker push "${HOST_REG}/${NAMESPACE}/analytics-service:${TAG}"
 ok "Imágenes publicadas en ${HOST_REG}"
 
 echo "== DNS check (registry must resolve inside cluster) =="
@@ -77,19 +86,21 @@ helm upgrade --install finlab ./infra/helm/finlab -n "$NAMESPACE" --create-names
   --set backend.image="${NAMESPACE}/backend" \
   --set backend.tag="$TAG" \
   --set frontend.image="${NAMESPACE}/frontend" \
-  --set frontend.tag="$TAG"
+  --set frontend.tag="$TAG" \
+  --set authService.image="${NAMESPACE}/auth-service" \
+  --set authService.tag="$TAG" \
+  --set audioService.image="${NAMESPACE}/audio-service" \
+  --set audioService.tag="$TAG" \
+  --set analyticsService.image="${NAMESPACE}/analytics-service" \
+  --set analyticsService.tag="$TAG"
 
 echo
 echo "== Wait rollout =="
-kubectl -n "$NAMESPACE" rollout status deploy/backend --timeout=180s || {
-  echo "Rollout backend falló. Diagnóstico:"
-  kubectl -n "$NAMESPACE" get pods -o wide || true
-  kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp | tail -n 40 || true
-  kubectl -n "$NAMESPACE" describe pod -l app=backend | egrep -i "Image:|Failed|pull|Back-off|Err" || true
-  exit 60
-}
-
-kubectl -n "$NAMESPACE" rollout status deploy/frontend --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deploy/backend          --timeout=180s || { kubectl -n "$NAMESPACE" get pods -o wide; exit 60; }
+kubectl -n "$NAMESPACE" rollout status deploy/frontend         --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deploy/auth-service     --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deploy/audio-service    --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deploy/analytics-service --timeout=180s
 
 echo
 echo "== Current state =="
