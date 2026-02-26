@@ -1,123 +1,99 @@
-# scripts/10_finlab_all.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
-warn() { echo "WARN: $*" >&2; }
 ok()   { echo "OK: $*"; }
+warn() { echo "WARN: $*" >&2; }
 
-# ParÃ¡metros (Finlab standard)
 CLUSTER="finlab"
 NAMESPACE="finlab"
-HOST_REG="localhost:5001"                 # push target desde WSL
+HOST_REG="localhost:5001"
 K3D_REG_NAME="finlab-registry"
-INTERNAL_REG="${K3D_REG_NAME}:5000"       # pull target desde nodos k3d
-TAG="${TAG:-0.1.0}"                       # permite override: TAG=0.1.1 ./scripts/10_finlab_all.sh
+TAG="${TAG:-0.1.0}"
 
-echo "== Finlab: full lab run =="
-echo "Cluster:      $CLUSTER"
-echo "Namespace:    $NAMESPACE"
-echo "Host registry (push):     $HOST_REG"
-echo "Internal registry (pull): $INTERNAL_REG"
-echo "Tag:          $TAG"
-echo
+echo "================================================"
+echo "  Nebula Audio — Full Deploy (Terraform-first)"
+echo "  Tag: $TAG"
+echo "================================================"
+echo ""
 
-# 0) ValidaciÃ³n previa (rÃ¡pida, sin destruir nada)
+# 0) Validación previa
 if [ -x "./scripts/06_validate_env.sh" ]; then
-    bash ./scripts/06_validate_env.sh
+  bash ./scripts/06_validate_env.sh
 else
-  warn "No existe ./scripts/06_validate_env.sh o no es ejecutable. ContinuarÃ©, pero es recomendable validarlo."
+  warn "06_validate_env.sh no encontrado, continuando..."
 fi
 
-# Check docker again (hard requirement)
-docker ps >/dev/null 2>&1 || fail "Docker no accesible sin sudo. Ejecuta ./scripts/07_fix_permissions.sh"
+docker ps >/dev/null 2>&1 || fail "Docker no accesible. Asegúrate de que Docker esté corriendo."
 
-# 1) Reset cluster
-echo
-echo "== Reset cluster =="
-k3d cluster delete "$CLUSTER" >/dev/null 2>&1 || true
+# 1) Reset y creación del cluster
+echo "== Paso 1: Cluster k3d =="
+bash ./scripts/01_cluster_k3d.sh
+ok "Cluster listo"
 
-# 2) Create cluster + registry
-echo
-echo "== Create cluster (k3d) =="
-k3d cluster create "$CLUSTER" \
-  --agents 2 \
-  --registry-create "${K3D_REG_NAME}:0.0.0.0:5001"
+# 2) Build y push de imágenes
+echo ""
+echo "== Paso 2: Build & Push imágenes =="
 
-kubectl create ns "$NAMESPACE" >/dev/null 2>&1 || true
-ok "Cluster creado"
+[ -d "./apps/backend" ]           || fail "No existe ./apps/backend"
+[ -d "./apps/frontend" ]          || fail "No existe ./apps/frontend"
+[ -d "./apps/auth-service" ]      || fail "No existe ./apps/auth-service"
+[ -d "./apps/audio-service" ]     || fail "No existe ./apps/audio-service"
+[ -d "./apps/analytics-service" ] || fail "No existe ./apps/analytics-service"
 
-# 3) Build & push images (host registry)
-echo
-echo "== Build & push images to host registry =="
-[ -d "./apps/backend" ]           || fail "No existe ./apps/backend."
-[ -d "./apps/frontend" ]          || fail "No existe ./apps/frontend."
-[ -d "./apps/auth-service" ]      || fail "No existe ./apps/auth-service."
-[ -d "./apps/audio-service" ]     || fail "No existe ./apps/audio-service."
-[ -d "./apps/analytics-service" ] || fail "No existe ./apps/analytics-service."
-
-docker build -t "${HOST_REG}/${NAMESPACE}/backend:${TAG}"           ./apps/backend
-docker build -t "${HOST_REG}/${NAMESPACE}/frontend:${TAG}"          ./apps/frontend
+docker build -t "${HOST_REG}/${NAMESPACE}/backend:0.2.4"           ./apps/backend
+docker build -t "${HOST_REG}/${NAMESPACE}/frontend:0.2.7"          ./apps/frontend
 docker build -t "${HOST_REG}/${NAMESPACE}/auth-service:${TAG}"      ./apps/auth-service
 docker build -t "${HOST_REG}/${NAMESPACE}/audio-service:${TAG}"     ./apps/audio-service
 docker build -t "${HOST_REG}/${NAMESPACE}/analytics-service:${TAG}" ./apps/analytics-service
 
-docker push "${HOST_REG}/${NAMESPACE}/backend:${TAG}"
-docker push "${HOST_REG}/${NAMESPACE}/frontend:${TAG}"
+docker push "${HOST_REG}/${NAMESPACE}/backend:0.2.4"
+docker push "${HOST_REG}/${NAMESPACE}/frontend:0.2.7"
 docker push "${HOST_REG}/${NAMESPACE}/auth-service:${TAG}"
 docker push "${HOST_REG}/${NAMESPACE}/audio-service:${TAG}"
 docker push "${HOST_REG}/${NAMESPACE}/analytics-service:${TAG}"
-ok "ImÃ¡genes publicadas en ${HOST_REG}"
+ok "Imágenes publicadas"
 
-echo "== DNS check (registry must resolve inside cluster) =="
+# 3) Verificar DNS interno del registry
+echo ""
+echo "== Paso 3: DNS check =="
 docker exec "k3d-${CLUSTER}-server-0" sh -c "nslookup ${K3D_REG_NAME} >/dev/null" \
-  || { echo "ERROR: El nodo no puede resolver '${K3D_REG_NAME}'. Pull fallarÃ¡."; exit 50; }
-
+  || fail "El nodo no puede resolver '${K3D_REG_NAME}'"
 docker exec "k3d-${CLUSTER}-server-0" sh -c "wget -qO- http://${K3D_REG_NAME}:5000/v2/ >/dev/null" \
-  || { echo "ERROR: El nodo no puede acceder a http://${K3D_REG_NAME}:5000/v2/. Pull fallarÃ¡."; exit 51; }
+  || fail "El nodo no puede acceder al registry"
+ok "Registry accesible desde el cluster"
 
-# 4) Deploy with Helm (force internal registry for pulls)
-echo
-echo "== Deploy via Helm (force internal registry) =="
-[ -d "./infra/helm/finlab" ] || fail "No existe ./infra/helm/finlab (chart)."
+# 4) Terraform — orquestador principal
+echo ""
+echo "== Paso 4: Terraform init + apply =="
+cd terraform
 
-helm upgrade --install finlab ./infra/helm/finlab -n "$NAMESPACE" --create-namespace \
-  --set registry="$INTERNAL_REG" \
-  --set backend.image="${NAMESPACE}/backend" \
-  --set backend.tag="$TAG" \
-  --set frontend.image="${NAMESPACE}/frontend" \
-  --set frontend.tag="$TAG" \
-  --set authService.image="${NAMESPACE}/auth-service" \
-  --set authService.tag="$TAG" \
-  --set audioService.image="${NAMESPACE}/audio-service" \
-  --set audioService.tag="$TAG" \
-  --set analyticsService.image="${NAMESPACE}/analytics-service" \
-  --set analyticsService.tag="$TAG"
+terraform init -input=false
+terraform apply -auto-approve -input=false
 
-echo
-echo "== Wait rollout =="
-kubectl -n "$NAMESPACE" rollout status deploy/backend          --timeout=180s || { kubectl -n "$NAMESPACE" get pods -o wide; exit 60; }
-kubectl -n "$NAMESPACE" rollout status deploy/frontend         --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deploy/auth-service     --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deploy/audio-service    --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deploy/analytics-service --timeout=180s
+ok "Infraestructura desplegada por Terraform"
+cd ..
 
-echo
-echo "== Current state =="
-kubectl -n "$NAMESPACE" get deploy,svc,pods -o wide
+# 5) Verificación final
+echo ""
+echo "== Paso 5: Estado del sistema =="
+kubectl -n "$NAMESPACE" get pods
+echo ""
+kubectl -n "$NAMESPACE" get hpa
+echo ""
+helm -n "$NAMESPACE" list
 
-# 5) Quick self-healing check (non-destructive-ish)
-echo
-echo "== Self-healing check: delete one backend pod =="
+# 6) Self-healing check
+echo ""
+echo "== Paso 6: Self-healing check =="
 BACKEND_POD="$(kubectl -n "$NAMESPACE" get pod -l app=backend -o jsonpath='{.items[0].metadata.name}')"
 kubectl -n "$NAMESPACE" delete pod "$BACKEND_POD" >/dev/null
-kubectl -n "$NAMESPACE" rollout status deploy/backend
+kubectl -n "$NAMESPACE" rollout status deploy/backend --timeout=60s
 ok "Self-healing validado"
 
-echo
-echo "== Done =="
-echo "Siguiente:"
-echo "  - Port-forward: ./scripts/05_port_forward.sh"
-echo "  - HPA: habilitar metrics-server y hpa.enabled=true (si tu chart lo incluye)"
-echo "  - E2E: tests/e2e"
-echo "  - Perf: k6 run tests/perf/smoke.js"
+echo ""
+echo "================================================"
+echo "  Sistema completo desplegado"
+echo "  Frontend: kubectl -n finlab port-forward svc/frontend 8080:80"
+echo "  Backend:  kubectl -n finlab port-forward svc/backend 3000:3000"
+echo "================================================"

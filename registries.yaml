@@ -1,0 +1,4 @@
+mirrors:
+  "finlab-registry:5000":
+    endpoint:
+      - "http://finlab-registry:5000"
